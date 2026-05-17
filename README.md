@@ -1,81 +1,218 @@
-# sms_messaging
+# SMS Messaging Microservice
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+A Java microservice built with Quarkus that simulates an SMS messaging platform. Supports sending messages, listing, and searching — with synchronous validation and simulated delivery responses.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+---
 
-## Running the application in dev mode
+## Tech Stack
 
-You can run your application in dev mode that enables live coding using:
+- **Java 17**
+- **Quarkus 3.35.2**
+- **PostgreSQL 15** — message persistence
+- **Hibernate ORM** — entity management
+- **SmallRye OpenAPI / Swagger UI** — API documentation
+- **Docker & Docker Compose** — containerization
 
-```shell script
+---
+
+## System Design
+
+```
+Client
+  │
+  ▼
+MessageResource        (REST layer — validation, routing)
+  │
+  ▼
+MessageService         (Business logic — simulate delivery)
+  │
+  ▼
+MessageRepository      (Data layer — EntityManager / JPQL)
+  │
+  ▼
+PostgreSQL
+```
+
+### Message Flow
+
+1. Client sends a `POST /api/messages` request with sender, receiver, and content.
+2. `MessageResource` validates the request using Bean Validation (`@Valid`).
+3. `MessageService` creates the message, simulates delivery (random DELIVERED / FAILED), persists it, and returns the result synchronously.
+4. The response includes the message ID, status, error description (if failed), and timestamps.
+
+### Message Statuses
+
+| Status    | Description                         |
+|-----------|-------------------------------------|
+| SENDING   | Message accepted, processing        |
+| DELIVERED | Successfully delivered              |
+| FAILED    | Delivery failed (with error reason) |
+
+---
+
+## Prerequisites
+
+- **Docker Desktop** installed and running
+- **Java 17+** and **Maven** (only needed if running without Docker)
+
+---
+
+## Running with Docker Compose (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/GiannisHadtzizorzis/sms_messaging.git
+cd sms_messaging
+
+# Start PostgreSQL
+docker-compose up postgres -d
+
+# Run the application in dev mode
 ./mvnw quarkus:dev
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+The API will be available at `http://localhost:8080`.
 
-## Packaging and running the application
-
-The application can be packaged using:
-
-```shell script
-./mvnw package
+To stop PostgreSQL:
+```bash
+docker-compose down
 ```
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
-
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
+To stop and remove all data:
+```bash
+docker-compose down -v
 ```
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
+### Running the full stack with Docker (app + database)
 
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
+```bash
+docker-compose up --build
 ```
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
+---
 
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
+## Testing with Swagger UI
+
+Once the application is running, open your browser and navigate to:
+
+```
+http://localhost:8080/q/swagger-ui
 ```
 
-You can then execute your native executable with: `./target/sms_messaging-1.0.0-SNAPSHOT-runner`
+### Step 1 — Send a message
 
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
+1. Expand the `POST /api/messages` endpoint
+2. Click **Try it out**
+3. Paste the following request body:
+```json
+{
+  "senderNumber": "99123456",
+  "receiverNumber": "25123456",
+  "content": "Hello, I am just checking up on you, are you ok?"
+}
+```
+4. Click **Execute**
+5. You will receive a `201` response with a `messageId`, `status` (DELIVERED or FAILED), and `sentAt` timestamp
+6. Copy the `messageId` from the response for use in the next step
 
-## Related Guides
+### Step 2 — Get a message by ID
 
-- Hibernate ORM with Panache ([guide](https://quarkus.io/guides/hibernate-orm-panache)): Simplified JPA/Hibernate data access layer with active record and repository patterns
-- REST ([guide](https://quarkus.io/guides/rest)): Build RESTful web services and APIs using Jakarta REST (formerly JAX-RS)
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-- Hibernate Validator ([guide](https://quarkus.io/guides/validation)): Bean validation using Hibernate Validator and Jakarta Validation annotations
-- SmallRye OpenAPI ([guide](https://quarkus.io/guides/openapi-swaggerui)): Generate OpenAPI schemas and serve Swagger UI for REST API documentation
-- JDBC Driver - PostgreSQL ([guide](https://quarkus.io/guides/datasource)): Connect to the PostgreSQL database via JDBC
+1. Expand `GET /api/messages/{id}`
+2. Click **Try it out**
+3. Paste the `messageId` from Step 1
+4. Click **Execute**
 
-## Provided Code
+### Step 3 — List all messages
 
-### Hibernate ORM
+1. Expand `GET /api/messages`
+2. Click **Try it out**
+3. Click **Execute** — returns all messages in the database
 
-Create your first JPA entity
+### Validation testing
 
-[Related guide section...](https://quarkus.io/guides/hibernate-orm)
+Try sending an invalid request to see validation in action:
+```json
+{
+  "senderNumber": "12345",
+  "receiverNumber": "",
+  "content": ""
+}
+```
+You should receive a `400 Bad Request` with descriptive validation errors.
 
+---
 
-[Related Hibernate with Panache section...](https://quarkus.io/guides/hibernate-orm-panache)
+## API Endpoints
 
+| Method | Endpoint               | Description              |
+|--------|------------------------|--------------------------|
+| POST   | `/api/messages`        | Send a new SMS message   |
+| GET    | `/api/messages`        | List all messages        |
+| GET    | `/api/messages/{id}`   | Get a message by ID      |
 
-### REST
+### Send Message — Request Body
 
-Easily start your REST Web Services
+```json
+{
+  "senderNumber": "99123456",
+  "receiverNumber": "25123456",
+  "content": "Hello from the SMS platform!"
+}
+```
 
-[Related guide section...](https://quarkus.io/guides/getting-started-reactive#reactive-jax-rs-resources)
+### Validation Rules
+
+| Field            | Rule                                              |
+|------------------|---------------------------------------------------|
+| `senderNumber`   | Required, valid Cyprus number (`[29]XXXXXXXX`)    |
+| `receiverNumber` | Required, valid Cyprus number (`[29]XXXXXXXX`)    |
+| `content`        | Required, max 160 characters                      |
+
+Valid number formats: `99123456`, `25123456`, `+35799123456`, `35725123456`
+
+### Send Message — Response (DELIVERED)
+
+```json
+{
+  "messageId": "2d8e53f5-78f0-420f-a2fc-e551e3904c96",
+  "status": "DELIVERED",
+  "errorDescription": null,
+  "sentAt": "2026-05-17T18:32:59.538542468"
+}
+```
+
+### Send Message — Response (FAILED)
+
+```json
+{
+  "messageId": "f3480c59-cc5e-40e2-8a12-f09bfc61535c",
+  "status": "FAILED",
+  "errorDescription": "Simulated delivery failure",
+  "sentAt": "2026-05-17T18:36:01.216071891"
+}
+```
+
+---
+
+## Project Structure
+
+```
+src/
+├── main/
+│   ├── java/dev/giannishadjizorzis/
+│   │   ├── Message.java                  # JPA entity
+│   │   ├── MessageStatus.java            # Enum: SENDING, DELIVERED, FAILED
+│   │   ├── MessageRepository.java        # JPQL queries via EntityManager
+│   │   ├── MessageService.java           # Business logic + delivery simulation
+│   │   ├── MessageResource.java          # REST endpoints
+│   │   ├── SendMessageRequest.java       # Request DTO with validation
+│   │   └── SendMessageResponse.java      # Response DTO
+│   └── resources/
+│       └── application.properties
+├── test/
+│   └── java/dev/giannishadjizorzis/
+Dockerfile
+docker-compose.yml
+pom.xml
+README.md
+```
