@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: sms_postgres
+    environment:
+      POSTGRES_DB: sms_messaging_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sms_messaging_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sms-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sms_service
+    ports:
+      - "8080:8080"
+    environment:
+      QUARKUS_DATASOURCE_USERNAME: postgres
+      QUARKUS_DATASOURCE_PASSWORD: postgres
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/sms_messaging_db
+    depends_on:
+      postgres:
+        condition: service_healthy
